@@ -4,11 +4,28 @@ import itertools
 import pandas as pd
 from io import BytesIO
 
-st.set_page_config(page_title="Opti-Bet Briques Pro", layout="wide", page_icon="🧱")
+st.set_page_config(page_title="Opti-Bet Grille Pro", layout="wide", page_icon="🎯")
 
-st.title("🧱 OPTI-BET — Système de Briques Modulaires & Blocs")
+st.markdown("""
+<style>
+div[data-testid="stCheckbox"] {
+    display: flex;
+    justify-content: center;
+}
+.grille-header {
+    font-weight: bold;
+    text-align: center;
+    background-color: #1e293b;
+    color: white;
+    padding: 6px;
+    border-radius: 4px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# --- 1. IMPORT OU DONNÉES BRUTES ---
+st.title("🎯 GRILLE DES PRONOSTICS & BRIQUES MODULAIRES")
+
+# --- 1. IMPORT OU CHARGEMENT ---
 with st.expander("📂 Importer ou coller la liste des matchs bruts", expanded=False):
     col_up, col_txt = st.columns([1, 1])
     with col_up:
@@ -33,180 +50,166 @@ elif json_texte.strip():
 
 if not matchs_bruts:
     matchs_bruts = [
-        {"id": 1, "match": "Panathinaikos - Fenerbahce", "c1": 1.38, "cN": 14.0, "c2": 2.25},
-        {"id": 2, "match": "Valence - Hapoel Tel-Aviv", "c1": 1.70, "cN": 13.0, "c2": 1.72},
-        {"id": 3, "match": "Real Madrid - Partizan", "c1": 1.14, "cN": 16.0, "c2": 3.50},
-        {"id": 4, "match": "Dubai - Étoile Rouge", "c1": 1.27, "cN": 15.0, "c2": 2.65},
-        {"id": 5, "match": "Bayern Munich - Virtus Bologne", "c1": 1.27, "cN": 15.0, "c2": 2.65},
-        {"id": 6, "match": "Paris Basketball - ASVEL", "c1": 1.31, "cN": 14.0, "c2": 2.45},
-        {"id": 7, "match": "ADA Blois - Poitiers", "c1": 1.34, "cN": 11.0, "c2": 2.75},
-        {"id": 8, "match": "Orléans - Rouen", "c1": 1.25, "cN": 13.0, "c2": 3.05}
+        {"id": 1, "match": "ADA Blois - Poitiers", "c1": 1.34, "cN": 11.0, "c2": 2.75},
+        {"id": 2, "match": "Orléans - Rouen", "c1": 1.25, "cN": 13.0, "c2": 3.05},
+        {"id": 3, "match": "ASVEL (F) - La TroncheM (F)", "c1": 1.02, "cN": 17.0, "c2": 6.25},
+        {"id": 4, "match": "Landerneau (F) - Angers (F)", "c1": 1.48, "cN": 10.0, "c2": 2.30},
+        {"id": 5, "match": "Landes (F) - Villeneuve (F)", "c1": 1.15, "cN": 14.0, "c2": 3.95},
+        {"id": 6, "match": "Montpellier (F) - Bourges (F)", "c1": 1.62, "cN": 11.0, "c2": 2.05},
+        {"id": 7, "match": "Toulouse (F) - Fla.Carolo (F)", "c1": 4.60, "cN": 14.0, "c2": 1.10},
+        {"id": 8, "match": "Unicaja - Tenerife", "c1": 1.30, "cN": 12.0, "c2": 2.90}
     ]
 
-# Liste des identifiants de briques possibles
-NOMS_BRIQUES = [f"Brique {chr(65 + i)}" for i in range(15)] # Brique A, Brique B, etc.
+NOMS_BRIQUES = [f"Brique {chr(65 + i)}" for i in range(20)]
 
-# --- 2. SÉLECTION DE L'ISSUE ET AFFECTATION AUX BRIQUES ---
-st.subheader("1. Définir les issues et assembler les briques")
-st.caption("Choisis l'issue de chaque match et affecte-le à une brique (mets plusieurs matchs dans la même brique pour créer un mini-combiné).")
+# --- 2. GRILLE DE SÉLECTION STYLE PRONOSOFT ---
+st.subheader("1. Grille interactive de sélection")
 
-briques_brutes = {}
+# En-tête du tableau
+h_id, h_m, h_1, h_n, h_2, h_brk = st.columns([0.8, 4, 1.6, 1.6, 1.6, 2.2])
+h_id.markdown("<div class='grille-header'>N°</div>", unsafe_allow_html=True)
+h_m.markdown("<div class='grille-header'>Événement</div>", unsafe_allow_html=True)
+h_1.markdown("<div class='grille-header'>1</div>", unsafe_allow_html=True)
+h_n.markdown("<div class='grille-header'>N</div>", unsafe_allow_html=True)
+h_2.markdown("<div class='grille-header'>2</div>", unsafe_allow_html=True)
+h_brk.markdown("<div class='grille-header'>Affectation</div>", unsafe_allow_html=True)
+
+briques_dict = {}
 
 for m in matchs_bruts:
-    c1, c2, c3 = st.columns([3, 2, 2])
-    nom_m = m.get("match", f"Match {m.get('id', '')}")
-    c1_val = m.get("c1", 1.0)
-    cn_val = m.get("cN", None)
-    c2_val = m.get("c2", 1.0)
+    mid = m.get("id", 1)
+    nom_m = m.get("match", f"Match {mid}")
+    c1 = m.get("c1", 1.0)
+    cn = m.get("cN", None)
+    c2 = m.get("c2", 1.0)
 
-    options_issues = ["Ignorer", f"1 (@{c1_val:.2f})"]
-    if cn_val:
-        options_issues.append(f"N (@{cn_val:.2f})")
-    options_issues.append(f"2 (@{c2_val:.2f})")
+    c_id, c_match, c_1, c_n, c_2, c_brk = st.columns([0.8, 4, 1.6, 1.6, 1.6, 2.2])
 
-    with c1:
-        st.write(f"**{nom_m}**")
-    with c2:
-        choix_issue = st.selectbox("Issue", options_issues, key=f"iss_{m.get('id', nom_m)}", label_visibility="collapsed")
-    with c3:
-        brique_choisie = st.selectbox("Affecter à", NOMS_BRIQUES, index=min(m.get("id", 1)-1, len(NOMS_BRIQUES)-1), key=f"brk_{m.get('id', nom_m)}", label_visibility="collapsed")
+    c_id.write(f"**{mid}**")
+    c_match.write(nom_m)
 
-    if choix_issue != "Ignorer":
-        if choix_issue.startswith("1"):
-            signe, cote = "1", c1_val
-        elif choix_issue.startswith("N"):
-            signe, cote = "N", cn_val
-        else:
-            signe, cote = "2", c2_val
+    chk_1 = c_1.checkbox(f"{c1:.2f}", key=f"g1_{mid}")
+    chk_n = c_n.checkbox(f"{cn:.2f}" if cn else "-", key=f"gn_{mid}", disabled=(cn is None))
+    chk_2 = c_2.checkbox(f"{c2:.2f}", key=f"g2_{mid}")
 
-        element = {"match": nom_m, "signe": signe, "cote": float(cote)}
-        briques_brutes.setdefault(brique_choisie, []).append(element)
+    brk_target = c_brk.selectbox(
+        "Brique",
+        NOMS_BRIQUES,
+        index=min(mid - 1, len(NOMS_BRIQUES) - 1),
+        key=f"gbrk_{mid}",
+        label_visibility="collapsed"
+    )
 
-# Consolidation des briques
-liste_briques_construites = []
-for nom_b, items in briques_brutes.items():
+    if chk_1:
+        briques_dict.setdefault(brk_target, []).append({"match": nom_m, "signe": "1", "cote": float(c1)})
+    if chk_n and cn:
+        briques_dict.setdefault(brk_target, []).append({"match": nom_m, "signe": "N", "cote": float(cn)})
+    if chk_2:
+        briques_dict.setdefault(brk_target, []).append({"match": nom_m, "signe": "2", "cote": float(c2)})
+
+# --- 3. CONSOLIDATION DES BRIQUES ---
+st.markdown("---")
+st.subheader("2. Briques formées")
+
+liste_briques = []
+for nom_b, items in briques_dict.items():
     if items:
-        cote_brique = 1.0
+        cote_b = 1.0
         details = []
         for it in items:
-            cote_brique *= it["cote"]
+            cote_b *= it["cote"]
             details.append(f"{it['match']} [{it['signe']}@{it['cote']:.2f}]")
-        
-        liste_briques_construites.append({
+        liste_briques.append({
             "nom": nom_b,
             "nb_matchs": len(items),
             "description": " + ".join(details),
-            "cote": round(cote_brique, 2)
+            "cote": round(cote_b, 2)
         })
 
-# Affichage des briques construites
-if liste_briques_construites:
-    st.markdown("#### Briques formées :")
-    df_briques_view = pd.DataFrame([
-        {"Brique": b["nom"], "Contenu": b["description"], "Nb matchs": b["nb_matchs"], "Cote totale": b["cote"]}
-        for b in liste_briques_construites
-    ])
-    st.dataframe(df_briques_view, use_container_width=True)
-else:
-    st.info("Aucun match sélectionné pour le moment.")
+if not liste_briques:
+    st.info("💡 Coche au moins une case dans la grille pour former une brique.")
     st.stop()
 
+df_briques = pd.DataFrame([
+    {"Brique": b["nom"], "Contenu": b["description"], "Nb matchs": b["nb_matchs"], "Cote totale": b["cote"]}
+    for b in liste_briques
+])
+st.dataframe(df_briques, use_container_width=True)
+
+# --- 4. FILTRES SUR LES BRIQUES ---
 st.markdown("---")
+st.subheader("3. Filtres sur les briques")
+cf1, cf2 = st.columns(2)
+with cf1:
+    c_min = cf1.number_input("Cote minimale acceptée", min_value=1.0, value=1.10, step=0.05)
+with cf2:
+    c_max = cf2.number_input("Cote maximale acceptée", min_value=1.0, value=30.0, step=0.5)
 
-# --- 3. FILTRES SUR LES BRIQUES ---
-st.subheader("2. Filtres sur les briques")
-c_f1, c_f2 = st.columns(2)
-with c_f1:
-    cote_brique_min = st.number_input("Cote minimale de la brique", min_value=1.0, value=1.10, step=0.05)
-with c_f2:
-    cote_brique_max = st.number_input("Cote maximale de la brique", min_value=1.0, value=20.0, step=0.5)
+briques_valides = [b for b in liste_briques if c_min <= b["cote"] <= c_max]
+st.write(f"👉 **{len(briques_valides)} brique(s) retenue(s)** après filtrage.")
 
-briques_filtrees = [b for b in liste_briques_construites if cote_brique_min <= b["cote"] <= cote_brique_max]
-st.info(f"**{len(briques_filtrees)} brique(s) validée(s)** après filtrage de cote.")
-
-if len(briques_filtrees) < 2:
-    st.warning("Il faut au minimum deux briques validées pour former des blocs et des combinés.")
+if len(briques_valides) < 2:
+    st.warning("Il faut au minimum deux briques validées pour créer des blocs et des tickets.")
     st.stop()
 
+# --- 5. GESTION DES BLOCS ET FORMULES COMBINATOIRES ---
 st.markdown("---")
+st.subheader("4. Configuration des blocs et combinatoires")
+cp1, cp2, cp3 = st.columns(3)
 
-# --- 4. CONFIGURATION DES BLOCS & COMBINAISONS ---
-st.subheader("3. Configuration des Blocs et Formats de jeu")
-c_p1, c_p2, c_p3 = st.columns(3)
+with cp1:
+    taille_b = cp1.number_input("Nombre de briques par bloc", min_value=2, max_value=len(briques_valides), value=min(4, len(briques_valides)))
+with cp2:
+    k_val = cp2.number_input("Formule combinatoire (k)", min_value=1, max_value=int(taille_b), value=min(2, int(taille_b)), help="2 pour des doubles de briques, 3 pour des triples, etc.")
+with cp3:
+    mise = cp3.number_input("Mise unitaire par ticket (€)", min_value=0.1, value=1.0, step=0.1)
 
-with c_p1:
-    taille_bloc = st.number_input(
-        "Nombre de briques par bloc",
-        min_value=2,
-        max_value=len(briques_filtrees),
-        value=min(4, len(briques_filtrees))
-    )
-with c_p2:
-    k_combinaison = st.number_input(
-        "Formule combinatoire (k)",
-        min_value=1,
-        max_value=int(taille_bloc),
-        value=min(2, int(taille_bloc)),
-        help="Exemple : 2 pour des doubles de briques, 3 pour des triples de briques"
-    )
-with c_p3:
-    mise_ticket = st.number_input("Mise par ticket (€)", min_value=0.1, value=1.0, step=0.1)
+blocs_decoupes = [briques_valides[i:i + taille_b] for i in range(0, len(briques_valides), taille_b)]
 
-# Découpage des briques en blocs
-blocs = [briques_filtrees[i:i + taille_bloc] for i in range(0, len(briques_filtrees), taille_bloc)]
-
-# --- 5. GÉNÉRATION DES COMBINAISONS ---
+# --- 6. RÉSULTATS & TICKETS ---
 st.markdown("---")
-st.subheader("4. Récapitulatif et Tickets générés")
+st.subheader("5. Tickets finaux générés")
 
-total_tickets = 0
-recap_export = []
-num_ticket_global = 1
+tickets_total = 0
+export_lignes = []
+num_ticket = 1
 
-for idx_b, bloc in enumerate(blocs, 1):
-    combis_bloc = list(itertools.combinations(bloc, min(k_combinaison, len(bloc))))
-    nb_t = len(combis_bloc)
-    total_tickets += nb_t
+for idx, b_item in enumerate(blocs_decoupes, 1):
+    combis = list(itertools.combinations(b_item, min(k_val, len(b_item))))
+    tickets_total += len(combis)
 
-    st.markdown(f"#### 📌 Bloc {idx_b} ({len(bloc)} briques) — Formule {k_combinaison}/{len(bloc)} ({nb_t} tickets)")
-
-    with st.expander(f"Détail des tickets du Bloc {idx_b}", expanded=False):
+    st.markdown(f"#### 📌 Bloc {idx} ({len(b_item)} briques) — Formule {k_val}/{len(b_item)} ({len(combis)} tickets)")
+    with st.expander(f"Voir les tickets du Bloc {idx}", expanded=False):
         lignes = []
-        for c in combis_bloc:
-            nom_combis = " × ".join([b["nom"] for b in c])
-            detail_combi = " | ".join([f"({b['description']})" for b in c])
-            cote_ticket = 1.0
-            for b in c:
-                cote_ticket *= b["cote"]
-            gain_pot = cote_ticket * mise_ticket
-
+        for c in combis:
+            cote_t = 1.0
+            for b in c: cote_t *= b["cote"]
+            gain_p = cote_t * mise
             lignes.append({
-                "N°": num_ticket_global,
-                "Briques": nom_combis,
-                "Détail": detail_combi,
-                "Cote": round(cote_ticket, 2),
-                "Mise (€)": mise_ticket,
-                "Gain Potentiel (€)": round(gain_pot, 2)
+                "N°": num_ticket,
+                "Briques": " × ".join([b["nom"] for b in c]),
+                "Détail": " | ".join([f"({b['description']})" for b in c]),
+                "Cote": round(cote_t, 2),
+                "Mise (€)": mise,
+                "Gain (€)": round(gain_p, 2)
             })
-            recap_export.append(lignes[-1])
-            num_ticket_global += 1
-
+            export_lignes.append(lignes[-1])
+            num_ticket += 1
         st.dataframe(pd.DataFrame(lignes), use_container_width=True)
 
-# --- 6. BILAN & EXPORT EXCEL ---
-st.markdown("---")
-c_bilan1, c_bilan2 = st.columns(2)
-c_bilan1.metric("Nombre total de tickets générés", total_tickets)
-c_bilan2.metric("Mise totale engagée", f"{total_tickets * mise_ticket:.2f} €")
+# Bilan
+c_bil1, c_bil2 = st.columns(2)
+c_bil1.metric("Nombre total de tickets", tickets_total)
+c_bil2.metric("Budget total nécessaire", f"{tickets_total * mise:.2f} €")
 
-if recap_export:
-    df_export = pd.DataFrame(recap_export)
+if export_lignes:
+    df_exp = pd.DataFrame(export_lignes)
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        df_export.to_excel(writer, sheet_name="Tickets Briques", index=False)
+        df_exp.to_excel(writer, sheet_name="Tickets Opti-Bet", index=False)
     st.download_button(
-        "📥 Exporter tous les tickets en Excel (.xlsx)",
+        "📥 Exporter les tickets en Excel (.xlsx)",
         data=buf.getvalue(),
-        file_name="mes_tickets_briques.xlsx",
+        file_name="tickets_grille_optibet.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
