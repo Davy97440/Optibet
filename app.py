@@ -65,7 +65,6 @@ NOMS_BRIQUES = [f"Brique {chr(65 + i)}" for i in range(20)]
 # --- 2. GRILLE DE SÉLECTION STYLE PRONOSOFT ---
 st.subheader("1. Grille interactive de sélection")
 
-# En-tête du tableau
 h_id, h_m, h_1, h_n, h_2, h_brk = st.columns([0.8, 4, 1.6, 1.6, 1.6, 2.2])
 h_id.markdown("<div class='grille-header'>N°</div>", unsafe_allow_html=True)
 h_m.markdown("<div class='grille-header'>Événement</div>", unsafe_allow_html=True)
@@ -166,11 +165,26 @@ with cp3:
 
 blocs_decoupes = [briques_valides[i:i + taille_b] for i in range(0, len(briques_valides), taille_b)]
 
-# --- 6. RÉSULTATS & TICKETS ---
+# --- 6. VÉRIFICATION DES RÉSULTATS (NOUVEAU) ---
 st.markdown("---")
-st.subheader("5. Tickets finaux générés")
+st.subheader("5. Validation des résultats réels")
+st.caption("Coche les briques dont tous les pronostics sont passés pour calculer instantanément tes gains.")
+
+briques_gagnantes = set()
+cols_check = st.columns(min(len(briques_valides), 4))
+for idx, b in enumerate(briques_valides):
+    with cols_check[idx % len(cols_check)]:
+        est_gagnante = st.checkbox(f"✅ {b['nom']} gagnée (@{b['cote']:.2f})", key=f"res_{b['nom']}")
+        if est_gagnante:
+            briques_gagnantes.add(b["nom"])
+
+# --- 7. GÉNÉRATION DES TICKETS & CALCUL DU BILAN ---
+st.markdown("---")
+st.subheader("6. Bilan & Détail des Tickets")
 
 tickets_total = 0
+tickets_payes = 0
+gain_total = 0.0
 export_lignes = []
 num_ticket = 1
 
@@ -183,33 +197,53 @@ for idx, b_item in enumerate(blocs_decoupes, 1):
         lignes = []
         for c in combis:
             cote_t = 1.0
-            for b in c: cote_t *= b["cote"]
-            gain_p = cote_t * mise
+            for b in c:
+                cote_t *= b["cote"]
+            gain_pot = cote_t * mise
+
+            # Vérification si le ticket est gagnant
+            ticket_valide = all(b["nom"] in briques_gagnantes for b in c)
+            statut = "✅ Gagné" if ticket_valide else "❌ En attente / Perdu"
+            gain_reel = gain_pot if ticket_valide else 0.0
+
+            if ticket_valide:
+                tickets_payes += 1
+                gain_total += gain_reel
+
             lignes.append({
                 "N°": num_ticket,
                 "Briques": " × ".join([b["nom"] for b in c]),
-                "Détail": " | ".join([f"({b['description']})" for b in c]),
                 "Cote": round(cote_t, 2),
                 "Mise (€)": mise,
-                "Gain (€)": round(gain_p, 2)
+                "Gain (€)": round(gain_pot, 2),
+                "Statut": statut,
+                "Gain Réel (€)": round(gain_reel, 2)
             })
             export_lignes.append(lignes[-1])
             num_ticket += 1
-        st.dataframe(pd.DataFrame(lignes), use_container_width=True)
 
-# Bilan
-c_bil1, c_bil2 = st.columns(2)
-c_bil1.metric("Nombre total de tickets", tickets_total)
-c_bil2.metric("Budget total nécessaire", f"{tickets_total * mise:.2f} €")
+        df_bloc = pd.DataFrame(lignes)
+        st.dataframe(df_bloc, use_container_width=True)
+
+# Bilan financier global
+mise_totale = tickets_total * mise
+benefice = gain_total - mise_totale
+roi = (benefice / mise_totale * 100) if mise_totale > 0 else 0.0
+
+c_res1, c_res2, c_res3, c_res4 = st.columns(4)
+c_res1.metric("Mise Totale", f"{mise_totale:.2f} €")
+c_res2.metric("Tickets Payés", f"{tickets_payes} / {tickets_total}")
+c_res3.metric("Gains Récupérés", f"{gain_total:.2f} €")
+c_res4.metric("Bénéfice Net", f"{benefice:+.2f} €", delta=f"{roi:+.1f} % ROI")
 
 if export_lignes:
     df_exp = pd.DataFrame(export_lignes)
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        df_exp.to_excel(writer, sheet_name="Tickets Opti-Bet", index=False)
+        df_exp.to_excel(writer, sheet_name="Bilan Opti-Bet", index=False)
     st.download_button(
-        "📥 Exporter les tickets en Excel (.xlsx)",
+        "📥 Exporter le bilan complet en Excel (.xlsx)",
         data=buf.getvalue(),
-        file_name="tickets_grille_optibet.xlsx",
+        file_name="bilan_paris_optibet.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
