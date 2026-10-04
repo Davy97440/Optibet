@@ -4,173 +4,209 @@ import itertools
 import pandas as pd
 from io import BytesIO
 
-st.set_page_config(page_title="Opti-Bet Pro", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Opti-Bet Briques Pro", layout="wide", page_icon="🧱")
 
-# Initialisation de la mémoire de session
-if "blocs" not in st.session_state:
-    st.session_state["blocs"] = [
-        {"nom": "Bloc 1", "matchs": []},
-        {"nom": "Bloc 2", "matchs": []},
-        {"nom": "Bloc 3", "matchs": []}
+st.title("🧱 OPTI-BET — Système de Briques Modulaires & Blocs")
+
+# --- 1. IMPORT OU DONNÉES BRUTES ---
+with st.expander("📂 Importer ou coller la liste des matchs bruts", expanded=False):
+    col_up, col_txt = st.columns([1, 1])
+    with col_up:
+        fichier_json = st.file_uploader("Fichier JSON brut", type=["json"])
+    with col_txt:
+        json_texte = st.text_area("Ou coller le JSON brut ici :", height=100)
+
+matchs_bruts = []
+
+if fichier_json is not None:
+    try:
+        data = json.load(fichier_json)
+        matchs_bruts = data.get("matchs", data) if isinstance(data, dict) else data
+    except Exception:
+        st.error("Erreur de lecture du fichier.")
+elif json_texte.strip():
+    try:
+        data = json.loads(json_texte)
+        matchs_bruts = data.get("matchs", data) if isinstance(data, dict) else data
+    except Exception:
+        st.error("JSON invalide dans la zone de texte.")
+
+if not matchs_bruts:
+    matchs_bruts = [
+        {"id": 1, "match": "Panathinaikos - Fenerbahce", "c1": 1.38, "cN": 14.0, "c2": 2.25},
+        {"id": 2, "match": "Valence - Hapoel Tel-Aviv", "c1": 1.70, "cN": 13.0, "c2": 1.72},
+        {"id": 3, "match": "Real Madrid - Partizan", "c1": 1.14, "cN": 16.0, "c2": 3.50},
+        {"id": 4, "match": "Dubai - Étoile Rouge", "c1": 1.27, "cN": 15.0, "c2": 2.65},
+        {"id": 5, "match": "Bayern Munich - Virtus Bologne", "c1": 1.27, "cN": 15.0, "c2": 2.65},
+        {"id": 6, "match": "Paris Basketball - ASVEL", "c1": 1.31, "cN": 14.0, "c2": 2.45},
+        {"id": 7, "match": "ADA Blois - Poitiers", "c1": 1.34, "cN": 11.0, "c2": 2.75},
+        {"id": 8, "match": "Orléans - Rouen", "c1": 1.25, "cN": 13.0, "c2": 3.05}
     ]
 
-st.title("⚡ OPTI-BET PRO — Optimisation & Systèmes")
+# Liste des identifiants de briques possibles
+NOMS_BRIQUES = [f"Brique {chr(65 + i)}" for i in range(15)] # Brique A, Brique B, etc.
 
-# --- PANNEAU DE CONFIGURATION & SAISIE ---
-with st.expander("🛠️ Gestion des sélections (Ajout / Import)", expanded=False):
-    tab_saisie, tab_coller, tab_fichier = st.tabs(["✍️ Ajouter un match", "📋 Coller du JSON", "📂 Fichier"])
+# --- 2. SÉLECTION DE L'ISSUE ET AFFECTATION AUX BRIQUES ---
+st.subheader("1. Définir les issues et assembler les briques")
+st.caption("Choisis l'issue de chaque match et affecte-le à une brique (mets plusieurs matchs dans la même brique pour créer un mini-combiné).")
 
-    # 1. Ajout manuel direct
-    with tab_saisie:
-        col_b, col_m, col_p, col_c = st.columns([1.5, 2.5, 1.5, 1])
-        bloc_cible = col_b.selectbox("Bloc", [b["nom"] for b in st.session_state["blocs"]], key="sel_bloc")
-        match_nom = col_m.text_input("Affiche (ex: Paris - ASVEL)", key="nom_in")
-        pari_nom = col_p.text_input("Pronostic (ex: Paris)", key="pari_in")
-        cote_val = col_c.number_input("Cote", min_value=1.01, value=1.50, step=0.05, key="cote_in")
+briques_brutes = {}
 
-        if st.button("➕ Ajouter ce match"):
-            if match_nom.strip():
-                for b in st.session_state["blocs"]:
-                    if b["nom"] == bloc_cible:
-                        nouvel_id = len(b["matchs"]) + 1
-                        b["matchs"].append({
-                            "id": nouvel_id,
-                            "nom": match_nom.strip(),
-                            "pari": pari_nom.strip() or "1",
-                            "cote": float(cote_val)
-                        })
-                st.rerun()
+for m in matchs_bruts:
+    c1, c2, c3 = st.columns([3, 2, 2])
+    nom_m = m.get("match", f"Match {m.get('id', '')}")
+    c1_val = m.get("c1", 1.0)
+    cn_val = m.get("cN", None)
+    c2_val = m.get("c2", 1.0)
 
-    # 2. Collage texte JSON
-    with tab_coller:
-        json_texte = st.text_area("Colle ici le texte JSON généré :", height=120)
-        if st.button("Valider le texte JSON"):
-            try:
-                donnees = json.loads(json_texte)
-                if "blocs" in donnees:
-                    st.session_state["blocs"] = donnees["blocs"]
-                    st.success("Sélections mises à jour avec succès !")
-                    st.rerun()
-                else:
-                    st.error("Format invalide : clé 'blocs' introuvable.")
-            except Exception as e:
-                st.error(f"Erreur d'analyse JSON : {e}")
+    options_issues = ["Ignorer", f"1 (@{c1_val:.2f})"]
+    if cn_val:
+        options_issues.append(f"N (@{cn_val:.2f})")
+    options_issues.append(f"2 (@{c2_val:.2f})")
 
-    # 3. Import par fichier classique
-    with tab_fichier:
-        f_up = st.file_uploader("Fichier JSON", type=["json"], label_visibility="collapsed")
-        if f_up is not None:
-            try:
-                donnees = json.load(f_up)
-                if "blocs" in donnees:
-                    st.session_state["blocs"] = donnees["blocs"]
-                    st.success("Fichier chargé !")
-                    st.rerun()
-            except Exception:
-                st.error("Impossible de lire ce fichier.")
+    with c1:
+        st.write(f"**{nom_m}**")
+    with c2:
+        choix_issue = st.selectbox("Issue", options_issues, key=f"iss_{m.get('id', nom_m)}", label_visibility="collapsed")
+    with c3:
+        brique_choisie = st.selectbox("Affecter à", NOMS_BRIQUES, index=min(m.get("id", 1)-1, len(NOMS_BRIQUES)-1), key=f"brk_{m.get('id', nom_m)}", label_visibility="collapsed")
 
-    # Bouton de remise à zéro
-    if st.button("🗑️ Réinitialiser tous les blocs"):
-        st.session_state["blocs"] = [
-            {"nom": "Bloc 1", "matchs": []},
-            {"nom": "Bloc 2", "matchs": []},
-            {"nom": "Bloc 3", "matchs": []}
-        ]
-        st.rerun()
+    if choix_issue != "Ignorer":
+        if choix_issue.startswith("1"):
+            signe, cote = "1", c1_val
+        elif choix_issue.startswith("N"):
+            signe, cote = "N", cn_val
+        else:
+            signe, cote = "2", c2_val
 
-# --- PARAMÈTRES GÉNÉRAUX ---
-col_param1, col_param2 = st.columns([2, 1])
+        element = {"match": nom_m, "signe": signe, "cote": float(cote)}
+        briques_brutes.setdefault(brique_choisie, []).append(element)
 
-with col_param1:
-    mode = st.radio(
-        "Mode de calcul combinatoire :",
-        ["Mode 1 : Blocs Système 3/5 (Triples)", "Mode 2 : Blocs Doubles (k=2)", "Mode 3 : Grand Réducteur"],
-        horizontal=True
-    )
+# Consolidation des briques
+liste_briques_construites = []
+for nom_b, items in briques_brutes.items():
+    if items:
+        cote_brique = 1.0
+        details = []
+        for it in items:
+            cote_brique *= it["cote"]
+            details.append(f"{it['match']} [{it['signe']}@{it['cote']:.2f}]")
+        
+        liste_briques_construites.append({
+            "nom": nom_b,
+            "nb_matchs": len(items),
+            "description": " + ".join(details),
+            "cote": round(cote_brique, 2)
+        })
 
-with col_param2:
-    mise_defaut = st.number_input("Mise unitaire par ticket (€)", min_value=0.1, value=1.0, step=0.1)
+# Affichage des briques construites
+if liste_briques_construites:
+    st.markdown("#### Briques formées :")
+    df_briques_view = pd.DataFrame([
+        {"Brique": b["nom"], "Contenu": b["description"], "Nb matchs": b["nb_matchs"], "Cote totale": b["cote"]}
+        for b in liste_briques_construites
+    ])
+    st.dataframe(df_briques_view, use_container_width=True)
+else:
+    st.info("Aucun match sélectionné pour le moment.")
+    st.stop()
 
 st.markdown("---")
 
-# --- CALCULS ET AFFICHAGE DES BLOCS ---
-total_mise_session = 0.0
-total_gain_session = 0.0
+# --- 3. FILTRES SUR LES BRIQUES ---
+st.subheader("2. Filtres sur les briques")
+c_f1, c_f2 = st.columns(2)
+with c_f1:
+    cote_brique_min = st.number_input("Cote minimale de la brique", min_value=1.0, value=1.10, step=0.05)
+with c_f2:
+    cote_brique_max = st.number_input("Cote maximale de la brique", min_value=1.0, value=20.0, step=0.5)
+
+briques_filtrees = [b for b in liste_briques_construites if cote_brique_min <= b["cote"] <= cote_brique_max]
+st.info(f"**{len(briques_filtrees)} brique(s) validée(s)** après filtrage de cote.")
+
+if len(briques_filtrees) < 2:
+    st.warning("Il faut au minimum deux briques validées pour former des blocs et des combinés.")
+    st.stop()
+
+st.markdown("---")
+
+# --- 4. CONFIGURATION DES BLOCS & COMBINAISONS ---
+st.subheader("3. Configuration des Blocs et Formats de jeu")
+c_p1, c_p2, c_p3 = st.columns(3)
+
+with c_p1:
+    taille_bloc = st.number_input(
+        "Nombre de briques par bloc",
+        min_value=2,
+        max_value=len(briques_filtrees),
+        value=min(4, len(briques_filtrees))
+    )
+with c_p2:
+    k_combinaison = st.number_input(
+        "Formule combinatoire (k)",
+        min_value=1,
+        max_value=int(taille_bloc),
+        value=min(2, int(taille_bloc)),
+        help="Exemple : 2 pour des doubles de briques, 3 pour des triples de briques"
+    )
+with c_p3:
+    mise_ticket = st.number_input("Mise par ticket (€)", min_value=0.1, value=1.0, step=0.1)
+
+# Découpage des briques en blocs
+blocs = [briques_filtrees[i:i + taille_bloc] for i in range(0, len(briques_filtrees), taille_bloc)]
+
+# --- 5. GÉNÉRATION DES COMBINAISONS ---
+st.markdown("---")
+st.subheader("4. Récapitulatif et Tickets générés")
+
+total_tickets = 0
 recap_export = []
+num_ticket_global = 1
 
-blocs_actifs = [b for b in st.session_state["blocs"] if b.get("matchs")]
+for idx_b, bloc in enumerate(blocs, 1):
+    combis_bloc = list(itertools.combinations(bloc, min(k_combinaison, len(bloc))))
+    nb_t = len(combis_bloc)
+    total_tickets += nb_t
 
-if not blocs_actifs:
-    st.info("💡 Aucun match dans la grille. Ouvre le volet « 🛠️ Gestion des sélections » ci-dessus pour ajouter des matchs ou coller une sélection.")
-else:
-    cols_blocs = st.columns(min(len(blocs_actifs), 3))
+    st.markdown(f"#### 📌 Bloc {idx_b} ({len(bloc)} briques) — Formule {k_combinaison}/{len(bloc)} ({nb_t} tickets)")
 
-    for idx, bloc in enumerate(blocs_actifs):
-        col_courante = cols_blocs[idx % 3]
-        with col_courante:
-            st.subheader(f"📌 {bloc.get('nom', f'Bloc {idx+1}')}")
-            matchs = bloc.get("matchs", [])
-            k = 3 if "Mode 1" in mode else 2
+    with st.expander(f"Détail des tickets du Bloc {idx_b}", expanded=False):
+        lignes = []
+        for c in combis_bloc:
+            nom_combis = " × ".join([b["nom"] for b in c])
+            detail_combi = " | ".join([f"({b['description']})" for b in c])
+            cote_ticket = 1.0
+            for b in c:
+                cote_ticket *= b["cote"]
+            gain_pot = cote_ticket * mise_ticket
 
-            gagnants = []
-            for m in matchs:
-                cle = f"chk_{idx}_{m['id']}"
-                label = f"{m['nom']} ({m.get('pari', '')} @ {m['cote']:.2f})"
-                if st.checkbox(label, key=cle):
-                    gagnants.append(m)
-
-            combis = list(itertools.combinations(matchs, min(k, len(matchs)))) if len(matchs) >= k else []
-            nb_tickets = len(combis)
-            mise_bloc = nb_tickets * mise_defaut
-            total_mise_session += mise_bloc
-
-            gain_bloc = 0.0
-            tickets_gagnes = 0
-
-            for c in combis:
-                if all(item in gagnants for item in c):
-                    tickets_gagnes += 1
-                    cote_ticket = 1.0
-                    for item in c:
-                        cote_ticket *= item["cote"]
-                    gain_bloc += mise_defaut * cote_ticket
-
-            total_gain_session += gain_bloc
-            net_bloc = gain_bloc - mise_bloc
-
-            st.write(f"**Gagnants :** {len(gagnants)} / {len(matchs)}")
-            st.write(f"**Tickets payés :** {tickets_gagnes} / {nb_tickets}")
-            st.metric("Résultat du Bloc", f"{gain_bloc:.2f} €", delta=f"{net_bloc:+.2f} €")
-
-            recap_export.append({
-                "Bloc": bloc.get("nom", f"Bloc {idx+1}"),
-                "Matchs Gagnants": f"{len(gagnants)}/{len(matchs)}",
-                "Tickets Payés": f"{tickets_gagnes}/{nb_tickets}",
-                "Mise (€)": mise_bloc,
-                "Gain Brut (€)": round(gain_bloc, 2),
-                "Net (€)": round(net_bloc, 2)
+            lignes.append({
+                "N°": num_ticket_global,
+                "Briques": nom_combis,
+                "Détail": detail_combi,
+                "Cote": round(cote_ticket, 2),
+                "Mise (€)": mise_ticket,
+                "Gain Potentiel (€)": round(gain_pot, 2)
             })
+            recap_export.append(lignes[-1])
+            num_ticket_global += 1
 
-    # --- SYNTHÈSE GLOBALE ---
-    st.markdown("---")
-    st.header("📊 Bilan Financier de la Session")
-    net_global = total_gain_session - total_mise_session
-    roi = (net_global / total_mise_session * 100) if total_mise_session > 0 else 0.0
+        st.dataframe(pd.DataFrame(lignes), use_container_width=True)
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Capital Engagé", f"{total_mise_session:.2f} €")
-    c2.metric("Gains Bruts", f"{total_gain_session:.2f} €")
-    c3.metric("Bénéfice Net", f"{net_global:+.2f} €")
-    c4.metric("ROI", f"{roi:+.1f} %")
+# --- 6. BILAN & EXPORT EXCEL ---
+st.markdown("---")
+c_bilan1, c_bilan2 = st.columns(2)
+c_bilan1.metric("Nombre total de tickets générés", total_tickets)
+c_bilan2.metric("Mise totale engagée", f"{total_tickets * mise_ticket:.2f} €")
 
-    if recap_export:
-        df = pd.DataFrame(recap_export)
-        buffer = BytesIO()
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            df.to_excel(writer, sheet_name="Synthèse Session", index=False)
-        st.download_button(
-            label="📥 Télécharger le suivi en Excel (.xlsx)",
-            data=buffer.getvalue(),
-            file_name="bilan_session.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+if recap_export:
+    df_export = pd.DataFrame(recap_export)
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df_export.to_excel(writer, sheet_name="Tickets Briques", index=False)
+    st.download_button(
+        "📥 Exporter tous les tickets en Excel (.xlsx)",
+        data=buf.getvalue(),
+        file_name="mes_tickets_briques.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
