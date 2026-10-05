@@ -4,7 +4,7 @@ import itertools
 import pandas as pd
 from io import BytesIO
 
-st.set_page_config(page_title="Opti-Bet Grille Pro", layout="wide", page_icon="🎯")
+st.set_page_config(page_title="Opti-Bet Miroir & Couverture", layout="wide", page_icon="🪞")
 
 st.markdown("""
 <style>
@@ -12,7 +12,7 @@ div[data-testid="stCheckbox"] {
     display: flex;
     justify-content: center;
 }
-.grille-header {
+.header-box {
     font-weight: bold;
     text-align: center;
     background-color: #1e293b;
@@ -23,9 +23,9 @@ div[data-testid="stCheckbox"] {
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎯 GRILLE DES PRONOSTICS & BRIQUES MODULAIRES")
+st.title("🪞 OPTI-BET — Système Favoris & Miroirs Outsiders")
 
-# --- 1. IMPORT OU CHARGEMENT ---
+# --- 1. IMPORT DU FICHIER JSON ---
 with st.expander("📂 Importer ou coller la liste des matchs bruts", expanded=False):
     col_up, col_txt = st.columns([1, 1])
     with col_up:
@@ -40,7 +40,7 @@ if fichier_json is not None:
         data = json.load(fichier_json)
         matchs_bruts = data.get("matchs", data) if isinstance(data, dict) else data
     except Exception:
-        st.error("Erreur de lecture du fichier.")
+        st.error("Erreur de lecture du fichier JSON.")
 elif json_texte.strip():
     try:
         data = json.loads(json_texte)
@@ -52,28 +52,26 @@ if not matchs_bruts:
     matchs_bruts = [
         {"id": 1, "match": "ADA Blois - Poitiers", "c1": 1.34, "cN": 11.0, "c2": 2.75},
         {"id": 2, "match": "Orléans - Rouen", "c1": 1.25, "cN": 13.0, "c2": 3.05},
-        {"id": 3, "match": "ASVEL (F) - La TroncheM (F)", "c1": 1.02, "cN": 17.0, "c2": 6.25},
-        {"id": 4, "match": "Landerneau (F) - Angers (F)", "c1": 1.48, "cN": 10.0, "c2": 2.30},
-        {"id": 5, "match": "Landes (F) - Villeneuve (F)", "c1": 1.15, "cN": 14.0, "c2": 3.95},
-        {"id": 6, "match": "Montpellier (F) - Bourges (F)", "c1": 1.62, "cN": 11.0, "c2": 2.05},
-        {"id": 7, "match": "Toulouse (F) - Fla.Carolo (F)", "c1": 4.60, "cN": 14.0, "c2": 1.10},
-        {"id": 8, "match": "Unicaja - Tenerife", "c1": 1.30, "cN": 12.0, "c2": 2.90}
+        {"id": 3, "match": "Landerneau (F) - Angers (F)", "c1": 1.48, "cN": 10.0, "c2": 2.30},
+        {"id": 4, "match": "Landes (F) - Villeneuve (F)", "c1": 1.15, "cN": 14.0, "c2": 3.95},
+        {"id": 5, "match": "Unicaja - Tenerife", "c1": 1.30, "cN": 12.0, "c2": 2.90},
+        {"id": 6, "match": "Manresa - Breogan", "c1": 1.49, "cN": 11.0, "c2": 2.25},
+        {"id": 7, "match": "Napoli - Reggio Emilia", "c1": 1.23, "cN": 14.0, "c2": 3.30},
+        {"id": 8, "match": "Bursaspor - Türk Telekom", "c1": 2.80, "cN": 12.0, "c2": 1.32}
     ]
 
-NOMS_BRIQUES = [f"Brique {chr(65 + i)}" for i in range(20)]
+# --- 2. CONFIGURATION MANUELLE DES ISSUES ---
+st.subheader("1. Sélection manuelle des Favoris et Miroirs Outsiders")
+st.caption("Pour chaque match, sélectionne quelle issue constitue le Favori et quelle issue constitue le Miroir Outsider.")
 
-# --- 2. GRILLE DE SÉLECTION STYLE PRONOSOFT ---
-st.subheader("1. Grille interactive de sélection")
+h_id, h_m, h_fav, h_out = st.columns([0.8, 3.5, 2.5, 2.5])
+h_id.markdown("<div class='header-box'>N°</div>", unsafe_allow_html=True)
+h_m.markdown("<div class='header-box'>Affiche</div>", unsafe_allow_html=True)
+h_fav.markdown("<div class='header-box'>⭐ Issue Favori / Base</div>", unsafe_allow_html=True)
+h_out.markdown("<div class='header-box'>💣 Issue Miroir Outsider</div>", unsafe_allow_html=True)
 
-h_id, h_m, h_1, h_n, h_2, h_brk = st.columns([0.8, 4, 1.6, 1.6, 1.6, 2.2])
-h_id.markdown("<div class='grille-header'>N°</div>", unsafe_allow_html=True)
-h_m.markdown("<div class='grille-header'>Événement</div>", unsafe_allow_html=True)
-h_1.markdown("<div class='grille-header'>1</div>", unsafe_allow_html=True)
-h_n.markdown("<div class='grille-header'>N</div>", unsafe_allow_html=True)
-h_2.markdown("<div class='grille-header'>2</div>", unsafe_allow_html=True)
-h_brk.markdown("<div class='grille-header'>Affectation</div>", unsafe_allow_html=True)
-
-briques_dict = {}
+selection_favoris = []
+selection_outsiders = []
 
 for m in matchs_bruts:
     mid = m.get("id", 1)
@@ -82,168 +80,165 @@ for m in matchs_bruts:
     cn = m.get("cN", None)
     c2 = m.get("c2", 1.0)
 
-    c_id, c_match, c_1, c_n, c_2, c_brk = st.columns([0.8, 4, 1.6, 1.6, 1.6, 2.2])
+    options = ["Aucun", f"1 (@{c1:.2f})"]
+    if cn:
+        options.append(f"N (@{cn:.2f})")
+    options.append(f"2 (@{c2:.2f})")
 
+    # Pré-sélections par défaut selon les cotes
+    def_fav = 1 if c1 <= c2 else (len(options) - 1)
+    def_out = (len(options) - 1) if def_fav == 1 else 1
+
+    c_id, c_m, c_fav, c_out = st.columns([0.8, 3.5, 2.5, 2.5])
     c_id.write(f"**{mid}**")
-    c_match.write(nom_m)
+    c_m.write(nom_m)
 
-    chk_1 = c_1.checkbox(f"{c1:.2f}", key=f"g1_{mid}")
-    chk_n = c_n.checkbox(f"{cn:.2f}" if cn else "-", key=f"gn_{mid}", disabled=(cn is None))
-    chk_2 = c_2.checkbox(f"{c2:.2f}", key=f"g2_{mid}")
+    choix_fav = c_fav.selectbox("Favori", options, index=def_fav, key=f"fav_{mid}", label_visibility="collapsed")
+    choix_out = c_out.selectbox("Miroir", options, index=def_out, key=f"out_{mid}", label_visibility="collapsed")
 
-    brk_target = c_brk.selectbox(
-        "Brique",
-        NOMS_BRIQUES,
-        index=min(mid - 1, len(NOMS_BRIQUES) - 1),
-        key=f"gbrk_{mid}",
-        label_visibility="collapsed"
-    )
+    # Récupération Favori
+    if choix_fav != "Aucun":
+        signe = choix_fav.split()[0]
+        cote = c1 if signe == "1" else (cn if signe == "N" else c2)
+        selection_favoris.append({"id": mid, "match": nom_m, "signe": signe, "cote": float(cote)})
 
-    if chk_1:
-        briques_dict.setdefault(brk_target, []).append({"match": nom_m, "signe": "1", "cote": float(c1)})
-    if chk_n and cn:
-        briques_dict.setdefault(brk_target, []).append({"match": nom_m, "signe": "N", "cote": float(cn)})
-    if chk_2:
-        briques_dict.setdefault(brk_target, []).append({"match": nom_m, "signe": "2", "cote": float(c2)})
+    # Récupération Outsider
+    if choix_out != "Aucun":
+        signe = choix_out.split()[0]
+        cote = c1 if signe == "1" else (cn if signe == "N" else c2)
+        selection_outsiders.append({"id": mid, "match": nom_m, "signe": signe, "cote": float(cote)})
 
-# --- 3. CONSOLIDATION DES BRIQUES ---
 st.markdown("---")
-st.subheader("2. Briques formées")
 
-liste_briques = []
-for nom_b, items in briques_dict.items():
-    if items:
-        cote_b = 1.0
-        details = []
-        for it in items:
-            cote_b *= it["cote"]
-            details.append(f"{it['match']} [{it['signe']}@{it['cote']:.2f}]")
-        liste_briques.append({
-            "nom": nom_b,
-            "nb_matchs": len(items),
-            "description": " + ".join(details),
-            "cote": round(cote_b, 2)
+# --- 3. PARAMÉTRAGE TOTAL DES DEUX UNIVERS ---
+st.subheader("2. Paramétrage des Univers & Filtres")
+
+col_par_fav, col_par_out = st.columns(2)
+
+with col_par_fav:
+    st.markdown("#### ⭐ Univers 1 : Système Favoris")
+    taille_bloc_fav = st.number_input("Taille des blocs de favoris", min_value=2, max_value=max(2, len(selection_favoris)), value=min(4, len(selection_favoris)))
+    k_fav = st.number_input("Formule combinatoire Favoris (k)", min_value=1, max_value=int(taille_bloc_fav), value=min(2, int(taille_bloc_fav)))
+    mise_fav = st.number_input("Mise par ticket Favori (€)", min_value=0.1, value=1.0, step=0.5)
+
+with col_par_out:
+    st.markdown("#### 💣 Univers 2 : Miroir Outsiders")
+    c_min_out = st.number_input("Cote minimale de l'outsider", min_value=1.5, value=2.0, step=0.2)
+    outsiders_filtres = [o for o in selection_outsiders if o["cote"] >= c_min_out]
+    st.caption(f"{len(outsiders_filtres)} outsiders retenus après filtrage")
+    
+    max_k_out = max(1, len(outsiders_filtres))
+    k_out = st.number_input("Formule combinatoire Outsiders (k)", min_value=1, max_value=max_k_out, value=min(3, max_k_out), help="Exemple : 3 pour des combinés triples d'outsiders à très grosse cote")
+    mise_out = st.number_input("Mise par ticket Outsider (€)", min_value=0.1, value=0.5, step=0.1)
+
+st.markdown("---")
+
+# --- 4. VÉRIFICATION DES RÉSULTATS RÉELS ---
+st.subheader("3. Vérification des Résultats réels")
+st.caption("Coche les issues qui sont passées pour vérifier simultanément tes deux univers :")
+
+resultats_valides = set()
+cols_verif = st.columns(min(len(matchs_bruts), 4))
+
+for idx, m in enumerate(matchs_bruts):
+    mid = m.get("id", 1)
+    nom_m = m.get("match", f"Match {mid}")
+    with cols_verif[idx % len(cols_verif)]:
+        st.write(f"**{nom_m}**")
+        if st.checkbox("1 gagné", key=f"res_1_{mid}"):
+            resultats_valides.add((mid, "1"))
+        if m.get("cN") and st.checkbox("N gagné", key=f"res_n_{mid}"):
+            resultats_valides.add((mid, "N"))
+        if st.checkbox("2 gagné", key=f"res_2_{mid}"):
+            resultats_valides.add((mid, "2"))
+
+st.markdown("---")
+
+# --- 5. GÉNÉRATION DES COMBINAISONS & CALCUL DU BILAN ---
+st.subheader("4. Détail des Tickets & Bilan Financier")
+
+# Génération Favoris (par blocs)
+blocs_fav = [selection_favoris[i:i + taille_bloc_fav] for i in range(0, len(selection_favoris), taille_bloc_fav)]
+tickets_fav = []
+gains_fav = 0.0
+
+for b_idx, b in enumerate(blocs_fav, 1):
+    combis = list(itertools.combinations(b, min(k_fav, len(b))))
+    for c in combis:
+        cote_t = 1.0
+        for it in c: cote_t *= it["cote"]
+        gagne = all((it["id"], it["signe"]) in resultats_valides for it in c)
+        gain_t = (cote_t * mise_fav) if gagne else 0.0
+        gains_fav += gain_t
+        tickets_fav.append({
+            "Univers": f"Favori (Bloc {b_idx})",
+            "Détail": " + ".join([f"{it['match']} [{it['signe']}]" for it in c]),
+            "Cote": round(cote_t, 2),
+            "Mise (€)": mise_fav,
+            "Statut": "✅ Gagné" if gagne else "❌ Perdu / En cours",
+            "Gain (€)": round(gain_t, 2)
         })
 
-if not liste_briques:
-    st.info("💡 Coche au moins une case dans la grille pour former une brique.")
-    st.stop()
+# Génération Outsiders (toutes combinaisons k)
+combis_out = list(itertools.combinations(outsiders_filtres, min(k_out, len(outsiders_filtres)))) if len(outsiders_filtres) >= k_out else []
+tickets_out = []
+gains_out = 0.0
 
-df_briques = pd.DataFrame([
-    {"Brique": b["nom"], "Contenu": b["description"], "Nb matchs": b["nb_matchs"], "Cote totale": b["cote"]}
-    for b in liste_briques
-])
-st.dataframe(df_briques, use_container_width=True)
+for c in combis_out:
+    cote_t = 1.0
+    for it in c: cote_t *= it["cote"]
+    gagne = all((it["id"], it["signe"]) in resultats_valides for it in c)
+    gain_t = (cote_t * mise_out) if gagne else 0.0
+    gains_out += gain_t
+    tickets_out.append({
+        "Univers": "Miroir Outsider",
+        "Détail": " + ".join([f"{it['match']} [{it['signe']}]" for it in c]),
+        "Cote": round(cote_t, 2),
+        "Mise (€)": mise_out,
+        "Statut": "✅ Gagné" if gagne else "❌ Perdu / En cours",
+        "Gain (€)": round(gain_t, 2)
+    })
 
-# --- 4. FILTRES SUR LES BRIQUES ---
-st.markdown("---")
-st.subheader("3. Filtres sur les briques")
-cf1, cf2 = st.columns(2)
-with cf1:
-    c_min = cf1.number_input("Cote minimale acceptée", min_value=1.0, value=1.10, step=0.05)
-with cf2:
-    c_max = cf2.number_input("Cote maximale acceptée", min_value=1.0, value=30.0, step=0.5)
+# Synthèse financière
+mise_totale_fav = len(tickets_fav) * mise_fav
+mise_totale_out = len(tickets_out) * mise_out
+mise_globale = mise_totale_fav + mise_totale_out
+gain_global = gains_fav + gains_out
+benefice_global = gain_global - mise_globale
+roi_global = (benefice_global / mise_globale * 100) if mise_globale > 0 else 0.0
 
-briques_valides = [b for b in liste_briques if c_min <= b["cote"] <= c_max]
-st.write(f"👉 **{len(briques_valides)} brique(s) retenue(s)** après filtrage.")
+# Affichage des métriques
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Capital Engagé", f"{mise_globale:.2f} €", f"Fav: {mise_totale_fav:.2f}€ | Out: {mise_totale_out:.2f}€")
+m2.metric("Gains Favoris", f"{gains_fav:.2f} €", f"{sum(1 for t in tickets_fav if 'Gagné' in t['Statut'])}/{len(tickets_fav)} payés")
+m3.metric("Gains Miroir Outsiders", f"{gains_out:.2f} €", f"{sum(1 for t in tickets_out if 'Gagné' in t['Statut'])}/{len(tickets_out)} payés")
+m4.metric("Bénéfice Net Global", f"{benefice_global:+.2f} €", delta=f"{roi_global:+.1f} % ROI")
 
-if len(briques_valides) < 2:
-    st.warning("Il faut au minimum deux briques validées pour créer des blocs et des tickets.")
-    st.stop()
+# Affichage des grilles générées
+tab_f, tab_o = st.tabs([f"⭐ Tickets Favoris ({len(tickets_fav)})", f"💣 Tickets Miroir Outsiders ({len(tickets_out)})"])
 
-# --- 5. GESTION DES BLOCS ET FORMULES COMBINATOIRES ---
-st.markdown("---")
-st.subheader("4. Configuration des blocs et combinatoires")
-cp1, cp2, cp3 = st.columns(3)
+with tab_f:
+    if tickets_fav:
+        st.dataframe(pd.DataFrame(tickets_fav), use_container_width=True)
+    else:
+        st.info("Aucun ticket favori généré.")
 
-with cp1:
-    taille_b = cp1.number_input("Nombre de briques par bloc", min_value=2, max_value=len(briques_valides), value=min(4, len(briques_valides)))
-with cp2:
-    k_val = cp2.number_input("Formule combinatoire (k)", min_value=1, max_value=int(taille_b), value=min(2, int(taille_b)), help="2 pour des doubles de briques, 3 pour des triples, etc.")
-with cp3:
-    mise = cp3.number_input("Mise unitaire par ticket (€)", min_value=0.1, value=1.0, step=0.1)
+with tab_o:
+    if tickets_out:
+        st.dataframe(pd.DataFrame(tickets_out), use_container_width=True)
+    else:
+        st.info("Aucun ticket outsider généré.")
 
-blocs_decoupes = [briques_valides[i:i + taille_b] for i in range(0, len(briques_valides), taille_b)]
-
-# --- 6. VÉRIFICATION DES RÉSULTATS (NOUVEAU) ---
-st.markdown("---")
-st.subheader("5. Validation des résultats réels")
-st.caption("Coche les briques dont tous les pronostics sont passés pour calculer instantanément tes gains.")
-
-briques_gagnantes = set()
-cols_check = st.columns(min(len(briques_valides), 4))
-for idx, b in enumerate(briques_valides):
-    with cols_check[idx % len(cols_check)]:
-        est_gagnante = st.checkbox(f"✅ {b['nom']} gagnée (@{b['cote']:.2f})", key=f"res_{b['nom']}")
-        if est_gagnante:
-            briques_gagnantes.add(b["nom"])
-
-# --- 7. GÉNÉRATION DES TICKETS & CALCUL DU BILAN ---
-st.markdown("---")
-st.subheader("6. Bilan & Détail des Tickets")
-
-tickets_total = 0
-tickets_payes = 0
-gain_total = 0.0
-export_lignes = []
-num_ticket = 1
-
-for idx, b_item in enumerate(blocs_decoupes, 1):
-    combis = list(itertools.combinations(b_item, min(k_val, len(b_item))))
-    tickets_total += len(combis)
-
-    st.markdown(f"#### 📌 Bloc {idx} ({len(b_item)} briques) — Formule {k_val}/{len(b_item)} ({len(combis)} tickets)")
-    with st.expander(f"Voir les tickets du Bloc {idx}", expanded=False):
-        lignes = []
-        for c in combis:
-            cote_t = 1.0
-            for b in c:
-                cote_t *= b["cote"]
-            gain_pot = cote_t * mise
-
-            # Vérification si le ticket est gagnant
-            ticket_valide = all(b["nom"] in briques_gagnantes for b in c)
-            statut = "✅ Gagné" if ticket_valide else "❌ En attente / Perdu"
-            gain_reel = gain_pot if ticket_valide else 0.0
-
-            if ticket_valide:
-                tickets_payes += 1
-                gain_total += gain_reel
-
-            lignes.append({
-                "N°": num_ticket,
-                "Briques": " × ".join([b["nom"] for b in c]),
-                "Cote": round(cote_t, 2),
-                "Mise (€)": mise,
-                "Gain (€)": round(gain_pot, 2),
-                "Statut": statut,
-                "Gain Réel (€)": round(gain_reel, 2)
-            })
-            export_lignes.append(lignes[-1])
-            num_ticket += 1
-
-        df_bloc = pd.DataFrame(lignes)
-        st.dataframe(df_bloc, use_container_width=True)
-
-# Bilan financier global
-mise_totale = tickets_total * mise
-benefice = gain_total - mise_totale
-roi = (benefice / mise_totale * 100) if mise_totale > 0 else 0.0
-
-c_res1, c_res2, c_res3, c_res4 = st.columns(4)
-c_res1.metric("Mise Totale", f"{mise_totale:.2f} €")
-c_res2.metric("Tickets Payés", f"{tickets_payes} / {tickets_total}")
-c_res3.metric("Gains Récupérés", f"{gain_total:.2f} €")
-c_res4.metric("Bénéfice Net", f"{benefice:+.2f} €", delta=f"{roi:+.1f} % ROI")
-
-if export_lignes:
-    df_exp = pd.DataFrame(export_lignes)
+# Export Excel consolidé
+tous_les_tickets = tickets_fav + tickets_out
+if tous_les_tickets:
+    df_bilan = pd.DataFrame(tous_les_tickets)
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        df_exp.to_excel(writer, sheet_name="Bilan Opti-Bet", index=False)
+        df_bilan.to_excel(writer, sheet_name="Bilan Favoris Miroirs", index=False)
     st.download_button(
         "📥 Exporter le bilan complet en Excel (.xlsx)",
-        data=buf.getvalue(),
-        file_name="bilan_paris_optibet.xlsx",
+        data=buf.getvalue>,
+        file_name="bilan_favoris_miroirs.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
