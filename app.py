@@ -2,11 +2,11 @@ import streamlit as st
 import json
 import itertools
 import io
+import math
 import pandas as pd
 
 st.set_page_config(page_title="Opti-Bet Miroir Pro", layout="wide", page_icon="🪞")
 
-# --- INITIALISATION DE L'ÉTAT DE SESSION ---
 if "resultats_valides" not in st.session_state:
     st.session_state.resultats_valides = []
 
@@ -29,7 +29,7 @@ div[data-testid="stCheckbox"] {
 
 st.title("🪞 OPTI-BET — Favoris & Miroirs Outsiders Pro")
 
-# --- 1. IMPORT DE SESSION & MATCHS BRUTS ---
+# --- 1. GESTION DE SESSION & IMPORT ---
 with st.expander("📂 Gestion de session & Import des matchs", expanded=False):
     tab_imp1, tab_imp2 = st.tabs(["Charger session complète", "Importer matchs bruts"])
     
@@ -39,7 +39,7 @@ with st.expander("📂 Gestion de session & Import des matchs", expanded=False):
             try:
                 sess_data = json.load(f_session)
                 st.session_state.resultats_valides = sess_data.get("resultats", [])
-                st.success("Session rechargée.")
+                st.success("Session rechargée avec succès.")
             except Exception:
                 st.error("Fichier de session invalide.")
                 
@@ -64,17 +64,17 @@ elif txt_matchs.strip():
 
 if not matchs_bruts:
     matchs_bruts = [
-        {"id": 1, "match": "ADA Blois - Poitiers", "c1": 1.34, "cN": 11.0, "c2": 2.75},
-        {"id": 2, "match": "Orléans - Rouen", "c1": 1.25, "cN": 13.0, "c2": 3.05},
-        {"id": 3, "match": "Landerneau (F) - Angers (F)", "c1": 1.48, "cN": 10.0, "c2": 2.30},
-        {"id": 4, "match": "Landes (F) - Villeneuve (F)", "c1": 1.15, "cN": 14.0, "c2": 3.95},
-        {"id": 5, "match": "Unicaja - Tenerife", "c1": 1.30, "cN": 12.0, "c2": 2.90},
-        {"id": 6, "match": "Manresa - Breogan", "c1": 1.49, "cN": 11.0, "c2": 2.25},
-        {"id": 7, "match": "Napoli - Reggio Emilia", "c1": 1.23, "cN": 14.0, "c2": 3.30},
-        {"id": 8, "match": "Bursaspor - Türk Telekom", "c1": 2.80, "cN": 12.0, "c2": 1.32}
+        {"id": 1, "match": "Baskonia - Girona", "c1": 1.12, "cN": 15.0, "c2": 4.20},
+        {"id": 2, "match": "Obradoiro - Real Madrid", "c1": 3.95, "cN": 16.0, "c2": 1.14},
+        {"id": 3, "match": "Cayirova - Bahcesehir Kol", "c1": 4.70, "cN": 15.0, "c2": 1.09},
+        {"id": 4, "match": "Virtus Bologne - Maxima Roma", "c1": 1.19, "cN": 14.0, "c2": 3.60},
+        {"id": 5, "match": "Gravelines - Asvel", "c1": 3.00, "cN": 14.0, "c2": 1.28},
+        {"id": 6, "match": "Pistoia - Basket Torino", "c1": 1.34, "cN": 12.0, "c2": 2.60},
+        {"id": 7, "match": "Lleida - SP Burgos", "c1": 1.27, "cN": 13.0, "c2": 3.00},
+        {"id": 8, "match": "Juve Caserta - Forti. Bologna", "c1": 2.75, "cN": 12.0, "c2": 1.30}
     ]
 
-# --- 2. SÉLECTION DES ISSUES (FAVORIS & MIROIRS) ---
+# --- 2. SÉLECTION DES ISSUES ---
 st.subheader("1. Sélection Favoris et Miroirs Outsiders")
 
 h_id, h_m, h_fav, h_out = st.columns([0.8, 3.5, 2.5, 2.5])
@@ -118,7 +118,7 @@ for m in matchs_bruts:
 
 st.markdown("---")
 
-# --- 3. PARAMÉTRAGE & CALCULATEUR D'AMORTISSEMENT ---
+# --- 3. PARAMÉTRAGE & AMORTISSEMENT ---
 st.subheader("2. Paramètres des Univers & Couverture")
 
 col_pf, col_po = st.columns(2)
@@ -126,39 +126,26 @@ col_pf, col_po = st.columns(2)
 with col_pf:
     st.markdown("#### ⭐ Univers Favoris")
     nb_fav = max(1, len(selection_fav))
-    t_bloc_fav = st.number_input("Taille des blocs Favoris", 1, nb_fav, min(4, nb_fav))
-    k_fav = st.number_input("Formule combinatoire Favoris (k)", 1, int(t_bloc_fav), min(2, int(t_bloc_fav)))
+    t_bloc_fav = st.number_input("Taille des blocs Favoris", 1, nb_fav, min(8, nb_fav))
+    k_fav = st.number_input("Formule combinatoire Favoris (k)", 1, int(t_bloc_fav), min(int(t_bloc_fav), int(t_bloc_fav)))
     mise_fav = st.number_input("Mise unitaire Favoris (€)", 0.1, 500.0, 1.0, 0.5)
-
-# Calcul préliminaire budget favoris pour amortissement
-blocs_temp = [selection_fav[i:i + int(t_bloc_fav)] for i in range(0, len(selection_fav), int(t_bloc_fav))]
-nb_tickets_fav_estime = sum(len(list(itertools.combinations(b, int(k_fav)))) for b in blocs_temp if len(b) >= k_fav)
-budget_fav_total = nb_tickets_fav_estime * mise_fav
 
 with col_po:
     st.markdown("#### 💣 Univers Miroir Outsiders")
+    miroirs_par_bloc = st.toggle("🔒 Générer les miroirs par bloc (Recommandé)", value=True, help="Si activé, chaque bloc de favoris crée ses propres combinés miroirs indépendamment.")
     c_min_out = st.number_input("Cote minimale Outsider", 1.0, 50.0, 2.0, 0.2)
     outs_filtres = [o for o in selection_out if o["cote"] >= c_min_out]
-    st.caption(f"{len(outs_filtres)} outsiders éligibles après filtre")
     
-    nb_out = max(1, len(outs_filtres))
-    k_out = st.number_input("Formule combinatoire Outsiders (k)", 1, nb_out, min(3, nb_out))
-    
-    # Indicateur d'amortissement
-    combis_out_test = list(itertools.combinations(outs_filtres, int(k_out))) if len(outs_filtres) >= k_out else []
-    if combis_out_test and budget_fav_total > 0:
-        cotes_combis = [itertools.accumulate([it["cote"] for it in c], lambda a, b: a * b) for c in combis_out_test]
-        cote_moy = sum(list(c)[-1] for c in cotes_combis) / len(combis_out_test)
-        mise_conseillee = max(0.1, round(budget_fav_total / max(cote_moy, 1.0), 2))
-        st.info(f"💡 Amortissement Favoris ({budget_fav_total:.2f} €) : cote moyenne combiné = **@{cote_moy:.1f}**. Mise conseillée : **{mise_conseillee:.2f} €** par ticket.")
+    if miroirs_par_bloc:
+        max_k_possible = int(t_bloc_fav)
     else:
-        mise_conseillee = 0.5
+        max_k_possible = max(1, len(outs_filtres))
 
-    mise_out = st.number_input("Mise unitaire Outsiders (€)", 0.1, 500.0, float(mise_conseillee), 0.1)
+    k_out = st.number_input("Formule combinatoire Outsiders (k)", 1, max_k_possible, min(int(t_bloc_fav) if miroirs_par_bloc else 3, max_k_possible))
+    mise_out = st.number_input("Mise unitaire Outsiders (€)", 0.1, 500.0, 0.5, 0.1)
 
+# --- 4. VÉRIFICATION DES RÉSULTATS ---
 st.markdown("---")
-
-# --- 4. VÉRIFICATION DES RÉSULTATS AVEC RACCOURCIS ---
 st.subheader("3. Vérification des Résultats réels")
 
 c_btn1, c_btn2, c_btn3 = st.columns(3)
@@ -193,19 +180,16 @@ for i, m in enumerate(matchs_bruts):
                 st.session_state.resultats_valides.remove(cle)
                 st.rerun()
 
-st.markdown("---")
-
-# --- 5. GÉNÉRATION DES COMBINAISONS AVEC CONTRÔLE DE CORRÉLATION ---
+# --- 5. GÉNÉRATION DES COMBINAISONS ---
 tickets_fav, gains_fav = [], 0.0
 tickets_out, gains_out = [], 0.0
 
 # Favoris
 if selection_fav and t_bloc_fav > 0:
-    blocs = [selection_fav[i:i + int(t_bloc_fav)] for i in range(0, len(selection_fav), int(t_bloc_fav))]
-    for b_idx, b in enumerate(blocs, 1):
+    blocs_fav = [selection_fav[i:i + int(t_bloc_fav)] for i in range(0, len(selection_fav), int(t_bloc_fav))]
+    for b_idx, b in enumerate(blocs_fav, 1):
         if len(b) >= k_fav:
             for c in itertools.combinations(b, int(k_fav)):
-                # Sécurité corrélation : un seul prono par match
                 if len(set(it["id"] for it in c)) != len(c):
                     continue
                 cote_t = 1.0
@@ -224,26 +208,52 @@ if selection_fav and t_bloc_fav > 0:
                 })
 
 # Outsiders
-if len(outs_filtres) >= k_out:
-    for c in itertools.combinations(outs_filtres, int(k_out)):
-        if len(set(it["id"] for it in c)) != len(c):
-            continue
-        cote_t = 1.0
-        for it in c:
-            cote_t *= it["cote"]
-        gagne = all(f"{it['id']}_{it['signe']}" in st.session_state.resultats_valides for it in c)
-        g = (cote_t * mise_out) if gagne else 0.0
-        gains_out += g
-        tickets_out.append({
-            "Univers": "Miroir Outsider",
-            "Détail": " + ".join([f"{it['match']} [{it['signe']}]" for it in c]),
-            "Cote": round(cote_t, 2),
-            "Mise (€)": mise_out,
-            "Statut": "✅ Gagné" if gagne else "❌ En attente / Perdu",
-            "Gain (€)": round(g, 2)
-        })
+if miroirs_par_bloc and t_bloc_fav > 0:
+    # Génération par blocs synchronisés avec les favoris
+    for b_idx, b_fav in enumerate(blocs_fav, 1):
+        ids_du_bloc = set(it["id"] for it in b_fav)
+        outs_du_bloc = [o for o in outs_filtres if o["id"] in ids_du_bloc]
+        if len(outs_du_bloc) >= k_out:
+            for c in itertools.combinations(outs_du_bloc, int(k_out)):
+                if len(set(it["id"] for it in c)) != len(c):
+                    continue
+                cote_t = 1.0
+                for it in c:
+                    cote_t *= it["cote"]
+                gagne = all(f"{it['id']}_{it['signe']}" in st.session_state.resultats_valides for it in c)
+                g = (cote_t * mise_out) if gagne else 0.0
+                gains_out += g
+                tickets_out.append({
+                    "Univers": f"Miroir (B{b_idx})",
+                    "Détail": " + ".join([f"{it['match']} [{it['signe']}]" for it in c]),
+                    "Cote": round(cote_t, 2),
+                    "Mise (€)": mise_out,
+                    "Statut": "✅ Gagné" if gagne else "❌ En attente / Perdu",
+                    "Gain (€)": round(g, 2)
+                })
+else:
+    # Génération globale sans blocs
+    if len(outs_filtres) >= k_out:
+        for c in itertools.combinations(outs_filtres, int(k_out)):
+            if len(set(it["id"] for it in c)) != len(c):
+                continue
+            cote_t = 1.0
+            for it in c:
+                cote_t *= it["cote"]
+            gagne = all(f"{it['id']}_{it['signe']}" in st.session_state.resultats_valides for it in c)
+            g = (cote_t * mise_out) if gagne else 0.0
+            gains_out += g
+            tickets_out.append({
+                "Univers": "Miroir Global",
+                "Détail": " + ".join([f"{it['match']} [{it['signe']}]" for it in c]),
+                "Cote": round(cote_t, 2),
+                "Mise (€)": mise_out,
+                "Statut": "✅ Gagné" if gagne else "❌ En attente / Perdu",
+                "Gain (€)": round(g, 2)
+            })
 
 # --- 6. BILAN FINANCIER & EXPORTS ---
+st.markdown("---")
 st.subheader("4. Bilan Financier Consolidé")
 
 mise_tot_f = len(tickets_fav) * mise_fav
@@ -267,7 +277,6 @@ with tab2:
     if tickets_out:
         st.dataframe(pd.DataFrame(tickets_out), use_container_width=True)
 
-# Export Excel et Sauvegarde JSON
 st.markdown("---")
 c_exp1, c_exp2 = st.columns(2)
 
@@ -283,12 +292,12 @@ if tous_tickets:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-# Sauvegarde d'état JSON
 etat_session = {
     "parametres": {
         "taille_bloc_fav": t_bloc_fav,
         "k_fav": k_fav,
         "mise_fav": mise_fav,
+        "miroirs_par_bloc": miroirs_par_bloc,
         "k_out": k_out,
         "mise_out": mise_out,
         "cote_min_out": c_min_out
